@@ -1,5 +1,4 @@
-/* eslint-disable no-trailing-spaces */
-/* eslint-disable eol-last */
+
 require('dotenv').config(); // Load environment variables
 
 const bodyParser = require('body-parser');
@@ -8,9 +7,8 @@ const express = require('express');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Use PORT from .env or default to 3000
-const mongoUrl = process.env.MONGO_URI; // Load MongoDB URI from .env
-
+const PORT = process.env.PORT || 3000; 
+const mongoUrl = process.env.MONGO_URI; 
 require('./models/User');
 const requireToken = require('./middleware/requireToken');
 const authUser = require('./routes/authUser');
@@ -40,8 +38,8 @@ app.get('/', (req, res) => {
     res.send('Welcome to the API - No authentication needed');
 });
 
+app.get("/favicon.ico", (req, res) => res.status(204).end());
+
 
 // Start Server
-app.listen(PORT, () => {
-    console.log(`Server Running on port ${PORT}`);
-});
+module.exports = app; //
