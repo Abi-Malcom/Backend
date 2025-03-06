@@ -1,31 +1,27 @@
-/* eslint-disable semi */
-/* eslint-disable eol-last */
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const jwtKey = process.env.JWT_SECRET; // Ensure this is set in your .env file
+const jwtKey = process.env.JWT_SECRET;
 
-module.exports = (req, res, next) => {
-    const { authorization } = req.headers;
-    if (!authorization) {
-        return res.status(401).send({ error: 'You must be logged in' });
-    }
-
-    const token = authorization.replace('Bearer ', '');
-
-    jwt.verify(token, jwtKey, async (err, payload) => {
-        if (err) {
-            return res.status(401).send({ error: 'You must be logged in' });
+module.exports = async (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
         }
 
-        const { userId } = payload;
-        const user = await User.findById(userId);
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, jwtKey);
+        
+        const user = await User.findById(decoded.userId);
         if (!user) {
-            return res.status(401).send({ error: 'User not found' });
+            return res.status(401).json({ error: 'Unauthorized: User not found' });
         }
 
         req.user = user;
         next();
-    });
+    } catch (error) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
 };

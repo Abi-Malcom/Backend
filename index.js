@@ -1,4 +1,3 @@
-
 require('dotenv').config(); // Load environment variables
 
 const bodyParser = require('body-parser');
@@ -9,8 +8,8 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000; 
 const mongoUrl = process.env.MONGO_URI; 
+
 require('./models/User');
-const requireToken = require('./middleware/requireToken');
 const authUser = require('./routes/authUser');
 
 // Middleware
@@ -33,13 +32,19 @@ mongoose.connection.on('error', (err) => {
     console.log('Error:', err);
 });
 
-// Protected Route
+// Remove protected route
+// app.use(requireToken); // ❌ Remove this if you don’t want authentication globally
+
+// Default Route
 app.get('/', (req, res) => {
-    res.send('Welcome to the API - No authentication needed');
+    res.send('Welcome to the API');
 });
 
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 
-
 // Start Server
-module.exports = app; //
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+
+module.exports = app;
