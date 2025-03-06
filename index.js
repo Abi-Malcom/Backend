@@ -36,9 +36,10 @@ mongoose.connection.on('error', (err) => {
 });
 
 // Protected Route
-app.get('/', requireToken, (req, res) => {
-    res.send(`Your email is ${req.user.email}`);
+app.get('/', (req, res) => {
+    res.send('Welcome to the API - No authentication needed');
 });
+
 
 // Start Server
 app.listen(PORT, () => {
