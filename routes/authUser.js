@@ -108,7 +108,7 @@ router.post('/signup', async (req, res) => {
         const { name, email, password, phone,address,language } = req.body;
 
         // Validate Required Fields
-        if (!name || !email || !password ||!address ||!language) {
+        if (!name || !email || !password ) {
             return res.status(400).json({ error: 'All fields are required' });
         }
 
