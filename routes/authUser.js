@@ -102,93 +102,98 @@ router.get('/pests', async (req, res) => {
     }
 });
 
+
 // ✅ User Signup
 router.post('/signup', async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, phone } = req.body;
 
+        // ✅ Validate Required Fields
         if (!name || !email || !password) {
             return res.status(400).json({ error: 'All fields are required' });
         }
 
-        // Validate email format
+        // ✅ Validate Email Format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             return res.status(400).json({ error: 'Invalid email format' });
         }
 
-        // Validate password strength
+        // ✅ Validate Password Strength (Min 8 chars, 1 Upper, 1 Lower, 1 Number, 1 Special Char)
         const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
         if (!passwordRegex.test(password)) {
-            return res.status(400).json({ error: 'Weak password format' });
+            return res.status(400).json({ 
+                error: 'Weak password: Must have at least 8 characters, 1 uppercase, 1 lowercase, 1 number, and 1 special character.' 
+            });
         }
 
-        // Check if a user with the same email or name exists
+        // ✅ Check if a user with the same email or name exists
         const existingUser = await User.findOne({ $or: [{ email }, { name }] });
         if (existingUser) {
             return res.status(400).json({ error: 'Email or Username already exists' });
         }
 
-        // Hash the password and create a new user document
+        // ✅ Hash Password Before Saving
         const hashedPassword = await bcrypt.hash(password, 10);
-        const user = new User({ name, email, password: hashedPassword });
+
+        // ✅ Create a New User
+        const user = new User({ name, email, password: hashedPassword, phone });
         await user.save();
 
-        // Create a token and send response
+        // ✅ Generate JWT Token
         const token = jwt.sign({ userId: user._id }, jwtKey, { expiresIn: '7d' });
+
+        // ✅ Send Success Response with Token
         res.status(201).json({ 
             message: 'User registered successfully', 
             token, 
-            user: { id: user._id, name, email } 
+            user: { id: user._id, name, email, phone } 
         });
+
     } catch (error) {
-        console.error(error);
+        console.error('Signup Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
-router.post("/signin", async (req, res) => {
+
+
+router.post('/signin', async (req, res) => {
     try {
-      const { email, password } = req.body;
-      console.log("Email:", email);
-      console.log("Password:", password);
-      
-      // Validate inputs
-      if (!email || !password) {
-        return res.status(400).json({ error: "Email and password are required" });
-      }
-  
-      // Get the user model dynamically (ensure getDynamicModel is correctly defined)
-      const User = getDynamicModel("users");
-      // Find user by email (no username support)
-      const user = await User.findOne({ email: email });
-      if (!user) {
-        return res.status(400).json({ error: "User not found" });
-      }
-  
-      // Trim the input password and log for debugging
-      const inputPassword = password.trim();
-      console.log("Input Password:", inputPassword);
-      console.log("Stored Hash:", user.password);
-  
-      // Validate password using bcrypt.compare
-      const isPasswordValid = await bcrypt.compare(inputPassword, user.password);
-      console.log("Password valid:", isPasswordValid);
-  
-      // Create JWT token
-      const token = jwt.sign({ userId: user._id }, jwtKey, { expiresIn: "7d" });
-  
-      // Send success response with token and user details
-      res.status(200).json({
-        message: "Login successful",
-        token,
-        user: { id: user._id, name: user.name, email: user.email }
-      });
+        const { email, password } = req.body;
+
+        // ✅ Validate Required Fields
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email and password are required' });
+        }
+
+        // ✅ Find User by Email
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        // ✅ Compare Password using Bcrypt
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        // ✅ Generate JWT Token
+        const token = jwt.sign({ userId: user._id }, jwtKey, { expiresIn: '7d' });
+
+        // ✅ Send Success Response with Token
+        res.status(200).json({
+            message: 'Login successful',
+            token,
+            user: { id: user._id, name: user.name, email: user.email }
+        });
+
     } catch (error) {
-      console.error("Error in /signin:", error);
-      res.status(500).json({ error: "Internal server error" });
+        console.error('Error in /signin:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-  });
+});
 
 // ✅ Middleware for authentication
 const requireAuth = async (req, res, next) => {
