@@ -5,21 +5,20 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const Plant = require('../models/Plants');
-const User = require('../models/User'); // Ensure this model exists
+const User = require('../models/User');
+const authenticate = require('../middleware/authenticate');
+dotenv.config(); 
 
-dotenv.config(); // Load environment variables
+const jwtKey = process.env.JWT_SECRET;
 
-const jwtKey = process.env.JWT_SECRET || 'your_jwt_secret_key';
-const otpStore = {}; // Temporary OTP storage
 
-// ✅ Ensure MongoDB is connected before running queries
 if (mongoose.connection.readyState === 0) {
     mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
         .then(() => console.log('MongoDB Connected'))
         .catch(err => console.error('MongoDB Connection Error:', err));
 }
 
-// ✅ Helper function to get a dynamic Mongoose model
+// Helper function to get a dynamic Mongoose model
 function getDynamicModel(collectionName) {
     if (mongoose.models[collectionName]) {
         return mongoose.models[collectionName]; // Return existing model
@@ -27,7 +26,7 @@ function getDynamicModel(collectionName) {
     return mongoose.model(collectionName, new mongoose.Schema({}, { strict: false }), collectionName);
 }
 
-// ✅ Fetch products from all collections OR a specific collection
+// Fetch products from all collections OR a specific collection
 router.get("/products", async (req, res) => {
     try {
         const { category } = req.query;
@@ -64,7 +63,7 @@ router.get("/products", async (req, res) => {
     }
 });
 
-// ✅ Fetch all plants from MongoDB
+// Fetch all plants from MongoDB
 router.get('/plants', async (req, res) => {
     try {
         const plants = await Plant.find({}).lean();
@@ -76,7 +75,7 @@ router.get('/plants', async (req, res) => {
     }
 });
 
-// ✅ Fetch Diseases from MongoDB
+// Fetch Diseases from MongoDB
 router.get('/diseases', async (req, res) => {
     try {
         const DiseaseModel = getDynamicModel("Diseases");
@@ -89,7 +88,7 @@ router.get('/diseases', async (req, res) => {
     }
 });
 
-// ✅ Fetch Pests from MongoDB
+//  Fetch Pests from MongoDB
 router.get('/pests', async (req, res) => {
     try {
         const PestModel = getDynamicModel("Pests");
@@ -103,23 +102,23 @@ router.get('/pests', async (req, res) => {
 });
 
 
-// ✅ User Signup
+// User Signup
 router.post('/signup', async (req, res) => {
     try {
-        const { name, email, password, phone } = req.body;
+        const { name, email, password, phone,address,language } = req.body;
 
-        // ✅ Validate Required Fields
-        if (!name || !email || !password) {
+        // Validate Required Fields
+        if (!name || !email || !password ||!address ||!language) {
             return res.status(400).json({ error: 'All fields are required' });
         }
 
-        // ✅ Validate Email Format
+        //  Validate Email Format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             return res.status(400).json({ error: 'Invalid email format' });
         }
 
-        // ✅ Validate Password Strength (Min 8 chars, 1 Upper, 1 Lower, 1 Number, 1 Special Char)
+        //  Validate Password Strength (Min 8 chars, 1 Upper, 1 Lower, 1 Number, 1 Special Char)
         const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
         if (!passwordRegex.test(password)) {
             return res.status(400).json({ 
@@ -127,27 +126,27 @@ router.post('/signup', async (req, res) => {
             });
         }
 
-        // ✅ Check if a user with the same email or name exists
+        //  Check if a user with the same email or name exists
         const existingUser = await User.findOne({ $or: [{ email }, { name }] });
         if (existingUser) {
             return res.status(400).json({ error: 'Email or Username already exists' });
         }
 
-        // ✅ Hash Password Before Saving
+        // Hash Password Before Saving
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // ✅ Create a New User
-        const user = new User({ name, email, password: hashedPassword, phone });
+        // Create a New User
+        const user = new User({ name, email, password: hashedPassword, phone,address,language });
         await user.save();
 
-        // ✅ Generate JWT Token
+        //  Generate JWT Token
         const token = jwt.sign({ userId: user._id }, jwtKey, { expiresIn: '7d' });
 
-        // ✅ Send Success Response with Token
+        //  Send Success Response with Token
         res.status(201).json({ 
             message: 'User registered successfully', 
             token, 
-            user: { id: user._id, name, email, phone } 
+            user: { id: user._id, name, email, phone ,address,language} 
         });
 
     } catch (error) {
@@ -162,27 +161,27 @@ router.post('/signin', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // ✅ Validate Required Fields
+        // Validate Required Fields
         if (!email || !password) {
             return res.status(400).json({ error: 'Email and password are required' });
         }
 
-        // ✅ Find User by Email
+        //  Find User by Email
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // ✅ Compare Password using Bcrypt
+        // Compare Password using Bcrypt
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // ✅ Generate JWT Token
+        // Generate JWT Token
         const token = jwt.sign({ userId: user._id }, jwtKey, { expiresIn: '7d' });
 
-        // ✅ Send Success Response with Token
+        // Send Success Response with Token
         res.status(200).json({
             message: 'Login successful',
             token,
@@ -194,30 +193,52 @@ router.post('/signin', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-
-// ✅ Middleware for authentication
-const requireAuth = async (req, res, next) => {
+router.get('/user', authenticate, async (req, res) => {
     try {
-        const token = req.headers.authorization?.split(' ')[1];
-        if (!token) return res.status(401).json({ error: 'Unauthorized: No token provided' });
-
-        const decoded = jwt.verify(token, jwtKey);
-        req.userId = decoded.userId;
-        next();
+      res.json(req.user);
     } catch (error) {
-        return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+      res.status(500).json({ message: 'Error fetching user data' });
     }
-};
+  });
 
-// ✅ User Profile API
-router.get('/profile', requireAuth, async (req, res) => {
+router.patch("/update", authenticate, async (req, res) => {
     try {
-        const user = await User.findById(req.userId).select('name email').lean();
-        if (!user) return res.status(404).json({ error: 'User not found' });
-        res.status(200).json({ user });
+        const { name, email, password, phone,language,address } = req.body;
+        const userId = req.user.userId; // Extract user ID from decoded JWT token
+
+        // Find user by ID
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Update fields if provided
+        if (name) user.name = name;
+        if (email) user.email = email;
+        if (phone) user.phone = phone;
+        if(language) user.language = language;
+        if(address) user.address = address
+
+        // Hash new password if provided
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            user.password = hashedPassword;
+        }
+
+        // Save updated user data
+        await user.save();
+
+        res.status(200).json({ 
+            message: "User profile updated successfully", 
+            user: { id: user._id, name: user.name, email: user.email, phone: user.phone,language:user.language,address:user.address }
+        });
+
     } catch (error) {
-        res.status(500).json({ error: 'Error fetching user data' });
+        console.error("Error in /update:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
+
+
 
 module.exports = router;

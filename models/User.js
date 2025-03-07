@@ -22,7 +22,10 @@ const userSchema = new mongoose.Schema({
     language:{
         type:String,
         default:'English',
-
+    },
+    address:{
+        type:String,
+        default:'',
     }
 });
 
