@@ -88,6 +88,7 @@ router.get('/diseases', async (req, res) => {
     }
 });
 
+
 //  Fetch Pests from MongoDB
 router.get('/pests', async (req, res) => {
     try {
@@ -101,24 +102,35 @@ router.get('/pests', async (req, res) => {
     }
 });
 
+router.get('/value-added-products', async (req, res) => {
+    try {
+        const ValueAddedProducts = getDynamicModel("Value-Added-Products");
+        const valueAddedProducts = await ValueAddedProducts.find({}).limit(10).lean();
+        console.log("Fetched Value Added Products:", valueAddedProducts);
+        res.json(valueAddedProducts);
+    } catch (error) {
+        console.error('Error fetching value-added-products:', error);
+        res.status(500).json({ error: 'Failed to fetch value-added-products' });
+    }
+}
+);
 
-// User Signup
 router.post('/signup', async (req, res) => {
     try {
-        const { name, email, password, phone,address,language } = req.body;
+        const { name, mobile, password, address, language } = req.body;
 
         // Validate Required Fields
-        if (!name || !email || !password ) {
+        if (!name || !mobile || !password) {
             return res.status(400).json({ error: 'All fields are required' });
         }
 
-        //  Validate Email Format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({ error: 'Invalid email format' });
+        // Validate Mobile Number Format (Assuming 10-digit number)
+        const mobileRegex = /^\d{10}$/;
+        if (!mobileRegex.test(mobile)) {
+            return res.status(400).json({ error: 'Invalid mobile number format' });
         }
 
-        //  Validate Password Strength (Min 8 chars, 1 Upper, 1 Lower, 1 Number, 1 Special Char)
+        // Validate Password Strength (Min 8 chars, 1 Upper, 1 Lower, 1 Number, 1 Special Char)
         const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
         if (!passwordRegex.test(password)) {
             return res.status(400).json({ 
@@ -126,27 +138,27 @@ router.post('/signup', async (req, res) => {
             });
         }
 
-        //  Check if a user with the same email or name exists
-        const existingUser = await User.findOne({ $or: [{ email }, { name }] });
+        // Check if a user with the same mobile number or name exists
+        const existingUser = await User.findOne({ $or: [{ mobile }, { name }] });
         if (existingUser) {
-            return res.status(400).json({ error: 'Email or Username already exists' });
+            return res.status(400).json({ error: 'Mobile number or Username already exists' });
         }
 
         // Hash Password Before Saving
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Create a New User
-        const user = new User({ name, email, password: hashedPassword, phone,address,language });
+        const user = new User({ name, mobile, password: hashedPassword, address, language });
         await user.save();
 
-        //  Generate JWT Token
+        // Generate JWT Token
         const token = jwt.sign({ userId: user._id }, jwtKey, { expiresIn: '7d' });
 
-        //  Send Success Response with Token
+        // Send Success Response with Token
         res.status(201).json({ 
             message: 'User registered successfully', 
             token, 
-            user: { id: user._id, name, email, phone ,address,language} 
+            user: { id: user._id, name, mobile, address, language } 
         });
 
     } catch (error) {
@@ -155,19 +167,17 @@ router.post('/signup', async (req, res) => {
     }
 });
 
-
-
 router.post('/signin', async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { mobile, password } = req.body;
 
         // Validate Required Fields
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
+        if (!mobile || !password) {
+            return res.status(400).json({ error: 'Mobile number and password are required' });
         }
 
-        //  Find User by Email
-        const user = await User.findOne({ email });
+        // Find User by Mobile Number
+        const user = await User.findOne({ mobile });
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
@@ -185,7 +195,7 @@ router.post('/signin', async (req, res) => {
         res.status(200).json({
             message: 'Login successful',
             token,
-            user: { id: user._id, name: user.name, email: user.email }
+            user: { id: user._id, name: user.name, mobile: user.mobile }
         });
 
     } catch (error) {
@@ -193,17 +203,19 @@ router.post('/signin', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
+
 router.get('/user', authenticate, async (req, res) => {
     try {
       res.json(req.user);
     } catch (error) {
       res.status(500).json({ message: 'Error fetching user data' });
     }
-  });
+});
 
 router.patch("/update", authenticate, async (req, res) => {
     try {
-        const { name, email, password, phone,language,address } = req.body;
+        const { name, mobile, password, language, address } = req.body;
         const userId = req.user.userId; // Extract user ID from decoded JWT token
 
         // Find user by ID
@@ -214,10 +226,9 @@ router.patch("/update", authenticate, async (req, res) => {
 
         // Update fields if provided
         if (name) user.name = name;
-        if (email) user.email = email;
-        if (phone) user.phone = phone;
-        if(language) user.language = language;
-        if(address) user.address = address
+        if (mobile) user.mobile = mobile;
+        if (language) user.language = language;
+        if (address) user.address = address;
 
         // Hash new password if provided
         if (password) {
@@ -230,7 +241,7 @@ router.patch("/update", authenticate, async (req, res) => {
 
         res.status(200).json({ 
             message: "User profile updated successfully", 
-            user: { id: user._id, name: user.name, email: user.email, phone: user.phone,language:user.language,address:user.address }
+            user: { id: user._id, name: user.name, mobile: user.mobile, phone: user.phone, language: user.language, address: user.address }
         });
 
     } catch (error) {
@@ -238,6 +249,7 @@ router.patch("/update", authenticate, async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
+
 
 
 
