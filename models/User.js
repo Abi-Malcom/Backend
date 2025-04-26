@@ -1,21 +1,18 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
 
 const userSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        unique: true, // Prevent duplicate usernames
     },
     password: {
         type: String,
         required: true,
-        // Removed unique: true, as multiple users might have the same password (hashed).
     },
     mobile: {
         type: String,
         required: true,
-        unique: true, // Mobile numbers should be unique
+        unique: true, // Ensures mobile numbers are unique
     },
     language: {
         type: String,
@@ -27,7 +24,13 @@ const userSchema = new mongoose.Schema({
     }
 });
 
-
-
 const User = mongoose.model('User', userSchema);
+
+// Remove email index if it exists (to prevent duplicate key errors)
+User.collection.dropIndex("email_1").catch(err => {
+    if (err.codeName !== 'IndexNotFound') {
+        console.error("Error removing email index:", err);
+    }
+});
+
 module.exports = User;
