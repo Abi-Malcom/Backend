@@ -7,6 +7,7 @@ const dotenv = require('dotenv');
 const Plant = require('../models/Plants');
 const User = require('../models/User');
 const authenticate = require('../middleware/authenticate');
+const razorpay = require('razorpay');
 dotenv.config(); 
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
@@ -114,78 +115,6 @@ router.get('/value-added-products', async (req, res) => {
     }
 });
 
-// Order Routes
-// Create a new order
-router.post('/orders', authenticate, async (req, res) => {
-    try {
-        // Create the order with user ID from authentication
-        const orderData = {
-            ...req.body,
-            userId: req.user.userId
-        };
-        
-        const newOrder = new Order(orderData);
-        const savedOrder = await newOrder.save();
-        
-        res.status(201).json({
-            success: true,
-            orderId: savedOrder._id,
-            message: 'Order created successfully'
-        });
-    } catch (error) {
-        console.error('Error creating order:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error creating order',
-            error: error.message
-        });
-    }
-});
-
-// Get all orders for the authenticated user
-router.get('/orders', authenticate, async (req, res) => {
-    try {
-        const orders = await Order.find({ userId: req.user.userId }).sort({ orderDate: -1 });
-        res.status(200).json({
-            success: true,
-            orders
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching orders',
-            error: error.message
-        });
-    }
-});
-
-// Get a specific order by ID
-router.get('/orders/:orderId', authenticate, async (req, res) => {
-    try {
-        const order = await Order.findOne({
-            _id: req.params.orderId,
-            userId: req.user.userId
-        });
-        
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Order not found'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            order
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching order',
-            error: error.message
-        });
-    }
-});
 
 router.post('/signup', async (req, res) => {
     try {
@@ -495,6 +424,70 @@ router.post('/cart/update-quantity', authenticate, async (req, res) => {
       console.error('Error updating cart quantity:', error);
       res.status(500).json({ error: 'Server error' });
     }
+});
+
+// Create new order
+router.post('/orders', async (req, res) => {
+  try {
+    const order = new Order({
+      userId: req.body.userId,
+      items: req.body.items,
+      totalAmount: req.body.totalAmount,
+      status: 'pending'
+    });
+
+    const savedOrder = await order.save();
+    
+    // Optional: Create Razorpay Order ID
+    const razorpayOrder = await razorpay.orders.create({
+      amount: req.body.totalAmount * 100,
+      currency: 'INR',
+      receipt: `order_${savedOrder._id}`,
+      notes: {
+        order_id: savedOrder._id.toString()
+      }
+    });
+
+    res.status(201).json({
+      orderId: savedOrder._id,
+      razorpayOrderId: razorpayOrder.id
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Order creation failed' });
+  }
+});
+
+// Confirm order payment
+router.patch('/:id/confirm', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Verify payment with Razorpay (important for security)
+    const payment = await razorpay.payments.fetch(req.body.paymentId);
+    
+    if (payment.status !== 'captured') {
+      return res.status(400).json({ message: 'Payment not captured' });
+    }
+
+    // Update order status
+    order.payment = {
+      paymentId: req.body.paymentId,
+      status: 'completed',
+      amount: payment.amount / 100,
+      method: payment.method
+    };
+    order.status = 'processing';
+    
+    await order.save();
+    
+    res.json({ message: 'Order confirmed successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Order confirmation failed' });
+  }
 });
 
 router.patch("/update", authenticate, async (req, res) => {
